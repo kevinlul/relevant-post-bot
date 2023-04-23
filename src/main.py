@@ -1,6 +1,7 @@
 import os
+from platform import python_version
 from typing import Tuple
-from praw import Reddit
+from praw import Reddit, __version__
 from praw.models import Submission
 from praw.models import Subreddit
 from dotenv import load_dotenv
@@ -12,20 +13,21 @@ import logging
 import string
 import time
 
+
 # I've saved my API token information to a .env file, which gets loaded here
 load_dotenv()
 CLIENT = os.getenv("CLIENT_ID")
 SECRET = os.getenv("CLIENT_SECRET")
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
+TARGETS = os.getenv("REDDIT_TARGETS")
 
-# Set the path absolute path of the chess_post database
-pickle_path = os.path.dirname(os.path.abspath(__file__)) + "/chess_posts.db"
+pickle_path = "/tmp/posts.pkl"
 db = pickledb.load(pickle_path, True)
 
 # Create the reddit object instance using Praw
 reddit = Reddit(
-    user_agent="RelevantChessPostBot",
+    user_agent=f"RelevantPostBot (run by /u/BastionBotDev; +https://github.com/kevinlul/relevant-post-bot) praw/{__version__} py/{python_version()}",
     client_id=CLIENT,
     client_secret=SECRET,
     username=USERNAME,
@@ -35,11 +37,7 @@ reddit = Reddit(
 CERTAINTY_THRESHOLD = 0.50
 SIMILARITY_THRESHOLD = 0.40
 
-GITHUB_TAG = (
-    "[^(fmhall)](https://www.reddit.com/user/fmhall) ^| [^(github)]({})\n".format(
-        "https://github.com/fmhall/relevant-post-bot"
-    )
-)
+GITHUB_TAG = "[^(GitHub)](https://github.com/kevinlul/relevant-post-bot)"
 log_format = "%(asctime)s: %(threadName)s: %(message)s"
 logging.basicConfig(format=log_format, level=logging.INFO, datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
@@ -63,8 +61,8 @@ def restart(handler: Callable):
 
 @restart
 def run(
-    circlejerk_sub_name: str = "anarchychess",
-    original_sub_name: str = "chess",
+    circlejerk_sub_name: str,
+    original_sub_name: str,
     quiet_mode: bool = False,
     add_os_comment: bool = True,
     certainty_threshold: float = CERTAINTY_THRESHOLD,
@@ -349,60 +347,18 @@ def delete_bad_comments(username: str):
 
 
 if __name__ == "__main__":
+    targets = [entry.split(",") for entry in TARGETS.split(";")]
+    logger.info(f"Targets: {targets}")
     logger.info("Main    : Creating threads")
-    threads = []
-    chess_thread = threading.Thread(target=run, args=(), name="chess")
-    tame_impala_thread = threading.Thread(
-        target=run,
-        args=(
-            "tameimpalacirclejerk",
-            "tameimpala",
-        ),
-        name="tame_impala",
-    )
-    flying_thread = threading.Thread(
-        target=run, args=("shittyaskflying", "flying"), name="flying"
-    )
-    aviation_thread = threading.Thread(
-        target=run, args=("shittyaskflying", "aviation", False, False), name="aviation"
-    )
-    fly_fishing_thread = threading.Thread(
-        target=run, args=("flyfishingcirclejerk", "flyfishing"), name="fly_fishing"
-    )
-    cricket_thread = threading.Thread(
-        target=run, args=("CricketShitpost", "Cricket"), name="cricket"
-    )
-    soccer_thread = threading.Thread(
-        target=run, args=("soccercirclejerk", "soccer"), name="soccer"
-    )
-    chessbeginners_thread = threading.Thread(
-        target=run, args=("anarchychess", "chessbeginners"), name="chessbeginners"
-    )
-    mapporn_thread = threading.Thread(
-        target=run, args=("mapporncirclejerk", "mapporn"), name="mapporn"
-    )
-    climbing_thread = threading.Thread(
-        target=run, args=("ClimbingCircleJerk", "climbing"), name="climbing"
-    )
-    math_thread = threading.Thread(
-        target=run, args=("AnarchyMath", "Math"), name="math"
-    )
-    cleanup_thread = threading.Thread(
-        target=delete_bad_comments, args=[USERNAME], name="cleanup"
-    )
 
-    threads.append(chess_thread)
-    threads.append(tame_impala_thread)
-    threads.append(flying_thread)
-    threads.append(aviation_thread)
-    threads.append(fly_fishing_thread)
-    threads.append(cricket_thread)
-    threads.append(soccer_thread)
-    threads.append(chessbeginners_thread)
-    threads.append(mapporn_thread)
-    threads.append(climbing_thread)
-    threads.append(math_thread)
-    threads.append(cleanup_thread)
+    threads = [
+        threading.Thread(
+            target=run,
+            args=(jerk_subreddit, main_subreddit),
+            name=main_subreddit
+        ) for main_subreddit, jerk_subreddit in targets
+    ]
+    threads.append(threading.Thread(target=delete_bad_comments, args=[USERNAME], name="cleanup"))
 
     logger.info("Main    : Starting threads")
     for thread in threads:
